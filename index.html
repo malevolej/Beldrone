@@ -1,0 +1,661 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1"/>
+<meta name="theme-color" content="#501313"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="BelDrone"/>
+<title>BelDrone — Espace aérien belge</title>
+<link rel="manifest" href="manifest.json"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --red:#501313;--red-mid:#A32D2D;--red-light:#FCEBEB;--red-text:#791F1F;
+  --amber:#854F0B;--amber-light:#FAEEDA;
+  --green:#3B6D11;--green-light:#EAF3DE;
+  --gray:#888780;--gray-light:#F1EFE8;--gray-border:#D3D1C7;
+  --white:#fff;--dark:#2C2C2A;
+}
+html,body{height:100%;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;background:var(--gray-light);color:var(--dark)}
+.app{display:flex;flex-direction:column;height:100vh;max-width:480px;margin:0 auto;background:var(--gray-light)}
+
+/* HEADER */
+.header{background:var(--red);padding:12px 16px 10px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-icon{width:36px;height:36px;background:var(--red-mid);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
+.logo-title{color:#fff;font-size:16px;font-weight:600}
+.logo-sub{color:#F09595;font-size:11px}
+.header-right{display:flex;align-items:center;gap:8px}
+.gps-badge{background:var(--red-mid);border-radius:12px;padding:3px 8px;font-size:11px;color:#F7C1C1;display:flex;align-items:center;gap:4px}
+.gps-badge.active{background:#27500A;color:#C0DD97}
+.live-dot{width:7px;height:7px;border-radius:50%;background:#639922;animation:pulse 2s infinite;flex-shrink:0}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* CONTENT */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 12px 0}
+.section{display:none;padding-bottom:70px}
+.section.active{display:block}
+
+/* CARDS */
+.card{background:var(--white);border-radius:14px;border:0.5px solid var(--gray-border);padding:14px 16px;margin-bottom:10px}
+.card-title{font-size:12px;color:var(--gray);margin-bottom:10px;display:flex;align-items:center;gap:6px;font-weight:500}
+.card-title span{color:var(--red-mid)}
+
+/* CLOCK */
+.clock-row{display:flex;align-items:center;justify-content:space-between;background:var(--red-light);border-radius:12px;padding:10px 14px;margin-bottom:10px;border:0.5px solid #F09595}
+.clock-time{font-size:28px;font-weight:600;color:var(--red);letter-spacing:2px;font-variant-numeric:tabular-nums}
+.clock-right{text-align:right}
+.clock-date{font-size:12px;color:var(--red-mid);font-weight:500}
+.clock-loc{font-size:11px;color:var(--gray);margin-top:2px}
+
+/* GPS BAR */
+.gps-bar{background:var(--red);border-radius:12px;padding:10px 14px;margin-bottom:10px;display:flex;align-items:center;gap:10px}
+.gps-bar-icon{color:#F09595;font-size:22px}
+.gps-bar-info{flex:1}
+.gps-bar-name{color:#fff;font-size:13px;font-weight:600}
+.gps-bar-coords{color:#F09595;font-size:11px;margin-top:1px;font-family:monospace}
+.gps-bar-btn{background:var(--red-mid);border:none;border-radius:8px;padding:6px 12px;color:#F7C1C1;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:5px;flex-shrink:0}
+.gps-bar-btn:active{opacity:0.8}
+
+/* STATUS */
+.status-card{text-align:center;padding:10px 0 6px}
+.status-icon{font-size:44px;margin-bottom:6px}
+.status-title{font-size:18px;font-weight:600;margin-bottom:2px}
+.status-sub{font-size:12px;color:var(--gray)}
+.badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:500;margin-top:8px}
+.badge.green{background:var(--green-light);color:var(--green)}
+.badge.amber{background:var(--amber-light);color:var(--amber)}
+.badge.red{background:var(--red-light);color:var(--red-mid)}
+
+/* WEATHER */
+.wx-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.wx-box{background:var(--gray-light);border-radius:10px;padding:10px 12px}
+.wx-val{font-size:18px;font-weight:600;margin-bottom:1px}
+.wx-lbl{font-size:11px;color:var(--gray)}
+.wx-bar{height:4px;border-radius:2px;background:var(--gray-border);margin-top:6px;overflow:hidden}
+.wx-fill{height:100%;border-radius:2px}
+.score-bar{height:8px;border-radius:4px;background:var(--gray-border);margin:8px 0 4px;overflow:hidden}
+.score-fill{height:100%;border-radius:4px;background:var(--green);transition:width 0.5s}
+
+/* CHECKLIST */
+.chk-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--gray-border);font-size:13px}
+.chk-item:last-child{border-bottom:none}
+.chk-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.chk-dot.ok{background:var(--green-light);color:var(--green)}
+.chk-dot.warn{background:var(--amber-light);color:var(--amber)}
+.chk-dot.bad{background:var(--red-light);color:var(--red-mid)}
+
+/* MAP */
+#map{width:100%;height:300px;border-radius:10px;overflow:hidden;border:0.5px solid var(--gray-border)}
+.map-toolbar{display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap;align-items:center}
+.filter-btn{padding:5px 12px;border-radius:20px;border:0.5px solid var(--gray-border);background:none;cursor:pointer;font-size:12px;color:var(--gray)}
+.filter-btn.active{background:var(--red);color:#F7C1C1;border-color:var(--red)}
+.center-btn{margin-left:auto;padding:5px 12px;border-radius:20px;border:0.5px solid #F09595;background:var(--red-light);color:var(--red-mid);cursor:pointer;font-size:12px;display:flex;align-items:center;gap:4px}
+.api-bar{display:flex;gap:6px;margin-bottom:8px}
+.api-bar input{flex:1;padding:8px 10px;border:0.5px solid var(--gray-border);border-radius:10px;font-size:12px;font-family:monospace;background:var(--white);color:var(--dark)}
+.api-bar button{padding:8px 14px;border:0.5px solid var(--gray-border);border-radius:10px;background:var(--gray-light);cursor:pointer;font-size:12px;color:var(--dark);white-space:nowrap}
+.map-status{font-size:11px;color:var(--gray);margin-top:6px;text-align:center}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:11px;color:var(--gray);margin-top:8px}
+.leg-item{display:flex;align-items:center;gap:4px}
+.leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* ZONES */
+.zone-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--gray-border);font-size:13px}
+.zone-item:last-child{border-bottom:none}
+.zone-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.zone-info{flex:1}
+.zone-name{font-weight:500}
+.zone-desc{font-size:11px;color:var(--gray);margin-top:1px}
+.zone-status{font-size:12px;font-weight:500}
+
+/* NOTAM */
+.notam-loc-bar{background:var(--red-light);border-radius:10px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:var(--red-mid);display:flex;align-items:center;gap:6px;border:0.5px solid #F09595}
+.notam-item{padding:9px 0;border-bottom:0.5px solid var(--gray-border)}
+.notam-item:last-child{border-bottom:none}
+.notam-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.notam-id{font-size:12px;font-weight:600;color:var(--red-mid);font-family:monospace}
+.notam-meta{display:flex;align-items:center;gap:6px}
+.notam-dist{font-size:11px;color:var(--red-mid);font-weight:500}
+.notam-desc{font-size:12px;color:var(--gray);line-height:1.5}
+.radius-row{display:flex;align-items:center;gap:10px}
+.radius-row input{flex:1}
+.radius-val{font-size:13px;font-weight:600;color:var(--red);min-width:44px}
+
+/* CATEGORY */
+.cat-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.cat-btn{padding:6px 14px;border-radius:20px;border:0.5px solid var(--gray-border);background:none;cursor:pointer;font-size:12px;color:var(--gray)}
+.cat-btn.active{background:var(--red);color:#F7C1C1;border-color:var(--red)}
+.info-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--gray-border);font-size:13px}
+.info-row:last-child{border-bottom:none}
+.info-label{color:var(--gray)}
+.info-val{font-weight:500}
+.link-item{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--gray-border);font-size:13px}
+.link-item:last-child{border-bottom:none}
+.link-item a{color:var(--red-mid);text-decoration:none;font-weight:500}
+
+/* NAV */
+.nav{display:flex;background:var(--white);border-top:0.5px solid var(--gray-border);flex-shrink:0;position:sticky;bottom:0}
+.nav-btn{flex:1;padding:10px 4px 8px;border:none;background:none;cursor:pointer;font-size:11px;color:var(--gray);display:flex;flex-direction:column;align-items:center;gap:3px;transition:color 0.15s}
+.nav-btn.active{color:var(--red-mid)}
+.nav-btn svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* REFRESH BTN */
+.refresh-btn{width:100%;padding:10px;border:0.5px solid var(--gray-border);border-radius:10px;background:none;cursor:pointer;font-size:13px;color:var(--gray);display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
+.refresh-btn:active{background:var(--gray-light)}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">🚁</div>
+      <div>
+        <div class="logo-title">BelDrone</div>
+        <div class="logo-sub">Espace aérien belge</div>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="gps-badge" id="gpsBadge">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+        GPS
+      </div>
+      <div class="live-dot"></div>
+    </div>
+  </div>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ACCUEIL -->
+    <div id="sec-home" class="section active">
+      <div class="clock-row">
+        <div class="clock-time" id="clock">--:--:--</div>
+        <div class="clock-right">
+          <div class="clock-date" id="dateStr">--</div>
+          <div class="clock-loc" id="clockLoc">Position inconnue</div>
+        </div>
+      </div>
+      <div class="gps-bar" id="gpsBar">
+        <div style="font-size:22px">📍</div>
+        <div class="gps-bar-info">
+          <div class="gps-bar-name" id="gpsCity">Appuyer pour localiser</div>
+          <div class="gps-bar-coords" id="gpsCoords">-- ° N — -- ° E</div>
+        </div>
+        <button class="gps-bar-btn" onclick="locateUser()">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+          GPS
+        </button>
+      </div>
+      <div class="card">
+        <div class="status-card">
+          <div class="status-icon">✈️</div>
+          <div class="status-title" id="flyStatus">Conditions favorables</div>
+          <div class="status-sub" id="flyLoc">Belgique — aujourd'hui</div>
+          <span class="badge green" id="flyBadge">Vol autorisé</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">🌤 Météo — <span id="wxCity">position actuelle</span></div>
+        <div class="wx-grid">
+          <div class="wx-box"><div class="wx-val" id="wxWind">14 km/h</div><div class="wx-lbl">Vent</div><div class="wx-bar"><div class="wx-fill" id="wxWindBar" style="width:28%;background:#639922"></div></div></div>
+          <div class="wx-box"><div class="wx-val" id="wxVis">9.2 km</div><div class="wx-lbl">Visibilité</div><div class="wx-bar"><div class="wx-fill" id="wxVisBar" style="width:90%;background:#639922"></div></div></div>
+          <div class="wx-box"><div class="wx-val" id="wxRain">12%</div><div class="wx-lbl">Pluie</div><div class="wx-bar"><div class="wx-fill" id="wxRainBar" style="width:12%;background:#639922"></div></div></div>
+          <div class="wx-box"><div class="wx-val" id="wxTemp">17°C</div><div class="wx-lbl">Température</div><div class="wx-bar"><div class="wx-fill" id="wxTempBar" style="width:55%;background:#E24B4A"></div></div></div>
+          <div class="wx-box"><div class="wx-val" id="wxHum">68%</div><div class="wx-lbl">Humidité</div><div class="wx-bar"><div class="wx-fill" id="wxHumBar" style="width:68%;background:#E24B4A"></div></div></div>
+          <div class="wx-box"><div class="wx-val" id="wxPres">1018 hPa</div><div class="wx-lbl">Pression</div><div class="wx-bar"><div class="wx-fill" id="wxPresBar" style="width:72%;background:#639922"></div></div></div>
+        </div>
+        <div style="margin-top:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:12px;color:var(--gray)">Indice de vol</span>
+            <span style="font-size:16px;font-weight:600;color:var(--green)" id="flyScore">8.5 / 10</span>
+          </div>
+          <div class="score-bar"><div class="score-fill" id="flyScoreBar" style="width:85%"></div></div>
+          <div style="font-size:11px;color:var(--green)" id="flyScoreText">Excellentes conditions de vol</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">✅ Checklist pré-vol</div>
+        <div class="chk-item"><div class="chk-dot ok">✓</div>Vent inférieur à 30 km/h</div>
+        <div class="chk-item"><div class="chk-dot ok">✓</div>Visibilité supérieure à 5 km</div>
+        <div class="chk-item"><div class="chk-dot ok">✓</div>Pas de NOTAM local actif</div>
+        <div class="chk-item"><div class="chk-dot warn">!</div>Vérifier zone CTR proche</div>
+        <div class="chk-item"><div class="chk-dot ok">✓</div>Couverture nuageuse acceptable</div>
+        <div class="chk-item"><div class="chk-dot ok">✓</div>Batterie et équipement vérifiés</div>
+      </div>
+    </div>
+
+    <!-- CARTE -->
+    <div id="sec-map" class="section">
+      <div class="card">
+        <div class="card-title">🗺 Carte de l'espace aérien belge</div>
+        <input type="hidden" id="apiKey" value="92e60d93252c31399437aac934b54993"/>
+        <div class="map-toolbar">
+          <button class="filter-btn active" onclick="setFilter(this,'all')">Tout</button>
+          <button class="filter-btn" onclick="setFilter(this,'danger')">Danger</button>
+          <button class="filter-btn" onclick="setFilter(this,'ctr')">CTR</button>
+          <button class="filter-btn" onclick="setFilter(this,'tma')">TMA</button>
+          <button class="filter-btn" onclick="setFilter(this,'free')">Libre</button>
+          <button class="center-btn" onclick="centerOnUser()">📍 Ma position</button>
+        </div>
+        <div id="map"></div>
+        <div class="legend">
+          <div class="leg-item"><div class="leg-dot" style="background:#E24B4A"></div>Interdit</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#EF9F27"></div>Restreint/CTR</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#378ADD"></div>TMA</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#639922"></div>Libre</div>
+          <div class="leg-item"><div class="leg-dot" style="background:#501313"></div>Vous</div>
+        </div>
+        <div class="map-status" id="mapStatus">Zones statiques — entrez une clé OpenAIP pour les données temps réel</div>
+      </div>
+      <div class="card">
+        <div class="card-title">🛡 Zones proches <span id="zonesLoc"></span></div>
+        <div id="zonesList">
+          <div class="zone-item"><div class="zone-dot" style="background:#E24B4A"></div><div class="zone-info"><div class="zone-name">CTR Bruxelles (EBBR)</div><div class="zone-desc">Rayon 9.3 km — autorisation requise</div></div><div class="zone-status" style="color:#A32D2D">Interdit</div></div>
+          <div class="zone-item"><div class="zone-dot" style="background:#E24B4A"></div><div class="zone-info"><div class="zone-name">CTR Liège (EBLG)</div><div class="zone-desc">Rayon 6.5 km</div></div><div class="zone-status" style="color:#A32D2D">Interdit</div></div>
+          <div class="zone-item"><div class="zone-dot" style="background:#EF9F27"></div><div class="zone-info"><div class="zone-name">Zone mil. Florennes</div><div class="zone-desc">EBD-7 — LU-VE 07:00-17:00</div></div><div class="zone-status" style="color:#854F0B">Attention</div></div>
+          <div class="zone-item"><div class="zone-dot" style="background:#639922"></div><div class="zone-info"><div class="zone-name">Ardennes — Zone libre</div><div class="zone-desc">Vol libre jusqu'à 120m AGL</div></div><div class="zone-status" style="color:#3B6D11">Libre</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- NOTAMS -->
+    <div id="sec-notam" class="section">
+      <div class="notam-loc-bar" id="notamLocBar">
+        📍 NOTAMs — Belgique complète
+      </div>
+      <div class="card">
+        <div class="card-title">🔔 NOTAMs actifs</div>
+        <div class="notam-item">
+          <div class="notam-header">
+            <span class="notam-id">B0412/26</span>
+            <div class="notam-meta"><span class="notam-dist" id="dist0"></span><span class="badge red">Critique</span></div>
+          </div>
+          <div class="notam-desc">Zone restreinte temporaire au-dessus du Palais Royal de Bruxelles. Rayon 2 km, sol → FL050. Expire 25 mai 18:00.</div>
+        </div>
+        <div class="notam-item">
+          <div class="notam-header">
+            <span class="notam-id">B0398/26</span>
+            <div class="notam-meta"><span class="notam-dist" id="dist1"></span><span class="badge amber">Attention</span></div>
+          </div>
+          <div class="notam-desc">Exercice militaire EBD-12 Kleine-Brogel. Actif LU-VE 08:00-16:00 UTC. Expire 30 mai.</div>
+        </div>
+        <div class="notam-item">
+          <div class="notam-header">
+            <span class="notam-id">B0371/26</span>
+            <div class="notam-meta"><span class="notam-dist" id="dist2"></span><span class="badge green">Info</span></div>
+          </div>
+          <div class="notam-desc">Grue mobile Gand centre. Obstacle 85m AMSL. Expire 31 mai.</div>
+        </div>
+        <div class="notam-item">
+          <div class="notam-header">
+            <span class="notam-id">B0355/26</span>
+            <div class="notam-meta"><span class="notam-dist" id="dist3"></span><span class="badge amber">Attention</span></div>
+          </div>
+          <div class="notam-desc">Feux d'artifice Namur, 24 mai 22h00-23h00. Rayon 1.5 km, 300m AGL.</div>
+        </div>
+        <button class="refresh-btn">🔄 Actualiser les NOTAMs</button>
+      </div>
+      <div class="card">
+        <div class="card-title">📡 Rayon de recherche GPS</div>
+        <div class="radius-row">
+          <input type="range" min="10" max="150" value="50" step="10" id="radiusSlider" oninput="updateRadius(this.value)"/>
+          <span class="radius-val" id="radiusVal">50 km</span>
+        </div>
+        <div style="font-size:11px;color:var(--gray);margin-top:6px" id="radiusInfo">Activez le GPS pour filtrer les NOTAMs par distance</div>
+      </div>
+    </div>
+
+    <!-- CATEGORIE -->
+    <div id="sec-cat" class="section">
+      <div class="card">
+        <div class="card-title">🚁 Ma catégorie de drone</div>
+        <div class="cat-tabs">
+          <button class="cat-btn active" onclick="selectCat(this,'loisir')">Loisir</button>
+          <button class="cat-btn" onclick="selectCat(this,'c1')">C1</button>
+          <button class="cat-btn" onclick="selectCat(this,'c2')">C2</button>
+          <button class="cat-btn" onclick="selectCat(this,'c3')">C3+</button>
+        </div>
+      </div>
+      <div class="card" id="catRules">
+        <div class="card-title">📋 Règles applicables</div>
+        <div class="info-row"><span class="info-label">Poids max</span><span class="info-val" id="r-poids">&lt; 250g</span></div>
+        <div class="info-row"><span class="info-label">Altitude max</span><span class="info-val" id="r-alt">120m AGL</span></div>
+        <div class="info-row"><span class="info-label">Immatriculation</span><span class="info-val" id="r-immat">Non requise</span></div>
+        <div class="info-row"><span class="info-label">Formation</span><span class="info-val" id="r-form">Non requise</span></div>
+        <div class="info-row"><span class="info-label">Assurance</span><span class="info-val" id="r-ass">Recommandée</span></div>
+        <div class="info-row"><span class="info-label">Zone résidentielle</span><span class="info-val" id="r-zone">Autorisée</span></div>
+        <div class="info-row"><span class="info-label">Vol BVLOS</span><span class="info-val" id="r-bvlos">Interdit</span></div>
+      </div>
+      <div class="card">
+        <div class="card-title">🔗 Liens officiels</div>
+        <div class="link-item">🔵 <a href="https://map.droneguide.be" target="_blank">map.droneguide.be — Carte officielle skeyes</a></div>
+        <div class="link-item">🔵 <a href="https://www.skeyes.be/fr/services/drones/" target="_blank">skeyes.be — Réglementation drones</a></div>
+        <div class="link-item">🔵 <a href="https://www.mobilit.belgium.be" target="_blank">SPF Mobilité — Réglementation EASA</a></div>
+        <div class="link-item">🔵 <a href="https://www.openaip.net" target="_blank">OpenAIP — Données espace aérien</a></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <button class="nav-btn active" onclick="showSection('home',this)">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      Accueil
+    </button>
+    <button class="nav-btn" onclick="showSection('map',this)">
+      <svg viewBox="0 0 24 24"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+      Carte
+    </button>
+    <button class="nav-btn" onclick="showSection('notam',this)">
+      <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      NOTAMs
+    </button>
+    <button class="nav-btn" onclick="showSection('cat',this)">
+      <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      Catégorie
+    </button>
+  </nav>
+
+</div>
+
+<script>
+// ---- NAVIGATION ----
+function showSection(name, btn) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sec-' + name).classList.add('active');
+  btn.classList.add('active');
+  if (name === 'map' && !mapInit) initMap();
+}
+
+// ---- HORLOGE ----
+function updateClock() {
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  document.getElementById('clock').textContent = pad(now.getHours()) + ':' + pad(now.getMinutes()) + ':' + pad(now.getSeconds());
+  const days = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+  const months = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+  document.getElementById('dateStr').textContent = days[now.getDay()] + ' ' + now.getDate() + ' ' + months[now.getMonth()] + ' ' + now.getFullYear();
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ---- GÉOLOCALISATION ----
+let userLat = null, userLng = null;
+const notamCoords = [
+  [50.844, 4.358], // Bruxelles Palais Royal
+  [51.168, 5.470], // Kleine-Brogel
+  [51.054, 3.719], // Gand
+  [50.465, 4.867]  // Namur
+];
+
+function locateUser() {
+  if (!navigator.geolocation) {
+    alert('Géolocalisation non supportée sur cet appareil.');
+    return;
+  }
+  document.getElementById('gpsCity').textContent = 'Localisation en cours...';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLng = pos.coords.longitude;
+      const latStr = userLat.toFixed(4) + '° N';
+      const lngStr = userLng.toFixed(4) + '° E';
+      document.getElementById('gpsCoords').textContent = latStr + ' — ' + lngStr;
+      document.getElementById('clockLoc').textContent = latStr + ' ' + lngStr;
+      document.getElementById('gpsBadge').classList.add('active');
+      document.getElementById('gpsBadge').textContent = '✓ GPS';
+
+      // Reverse geocoding léger via Nominatim
+      fetch('https://nominatim.openstreetmap.org/reverse?format=json&lat=' + userLat + '&lon=' + userLng + '&accept-language=fr')
+        .then(r => r.json())
+        .then(d => {
+          const city = d.address.city || d.address.town || d.address.village || d.address.municipality || 'Position GPS';
+          const country = d.address.country || '';
+          document.getElementById('gpsCity').textContent = city + (country ? ', ' + country : '');
+          document.getElementById('clockLoc').textContent = city;
+          document.getElementById('wxCity').textContent = city;
+          document.getElementById('flyLoc').textContent = city + ' — aujourd\'hui';
+          document.getElementById('notamLocBar').textContent = '📍 NOTAMs filtrés autour de ' + city;
+          updateNotamDistances();
+          if (mapInit) centerOnUser();
+        })
+        .catch(() => {
+          document.getElementById('gpsCity').textContent = 'Position GPS active';
+          updateNotamDistances();
+          if (mapInit) centerOnUser();
+        });
+
+      // Météo via Open-Meteo (gratuit, sans clé)
+      fetch('https://api.open-meteo.com/v1/forecast?latitude=' + userLat + '&longitude=' + userLng + '&current=temperature_2m,relative_humidity_2m,precipitation_probability,wind_speed_10m,surface_pressure,visibility&wind_speed_unit=kmh&forecast_days=1')
+        .then(r => r.json())
+        .then(d => {
+          const c = d.current;
+          const wind = Math.round(c.wind_speed_10m);
+          const vis = (c.visibility / 1000).toFixed(1);
+          const rain = Math.round(c.precipitation_probability);
+          const temp = Math.round(c.temperature_2m);
+          const hum = Math.round(c.relative_humidity_2m);
+          const pres = Math.round(c.surface_pressure);
+
+          document.getElementById('wxWind').textContent = wind + ' km/h';
+          document.getElementById('wxVis').textContent = vis + ' km';
+          document.getElementById('wxRain').textContent = rain + '%';
+          document.getElementById('wxTemp').textContent = temp + '°C';
+          document.getElementById('wxHum').textContent = hum + '%';
+          document.getElementById('wxPres').textContent = pres + ' hPa';
+
+          document.getElementById('wxWindBar').style.width = Math.min(wind / 60 * 100, 100) + '%';
+          document.getElementById('wxWindBar').style.background = wind < 20 ? '#639922' : wind < 40 ? '#EF9F27' : '#E24B4A';
+          document.getElementById('wxVisBar').style.width = Math.min(parseFloat(vis) / 10 * 100, 100) + '%';
+          document.getElementById('wxVisBar').style.background = parseFloat(vis) > 5 ? '#639922' : '#E24B4A';
+          document.getElementById('wxRainBar').style.width = rain + '%';
+          document.getElementById('wxRainBar').style.background = rain < 20 ? '#639922' : rain < 50 ? '#EF9F27' : '#E24B4A';
+          document.getElementById('wxTempBar').style.width = Math.min((temp + 10) / 50 * 100, 100) + '%';
+          document.getElementById('wxHumBar').style.width = hum + '%';
+          document.getElementById('wxHumBar').style.background = hum < 70 ? '#639922' : '#E24B4A';
+          document.getElementById('wxPresBar').style.width = Math.min((pres - 970) / 60 * 100, 100) + '%';
+
+          // Calcul indice de vol
+          let score = 10;
+          if (wind > 30) score -= 3; else if (wind > 20) score -= 1;
+          if (parseFloat(vis) < 3) score -= 3; else if (parseFloat(vis) < 5) score -= 1;
+          if (rain > 50) score -= 3; else if (rain > 20) score -= 1;
+          score = Math.max(0, Math.min(10, score));
+          document.getElementById('flyScore').textContent = score.toFixed(1) + ' / 10';
+          document.getElementById('flyScoreBar').style.width = (score * 10) + '%';
+          document.getElementById('flyScoreBar').style.background = score >= 7 ? '#639922' : score >= 4 ? '#EF9F27' : '#E24B4A';
+          document.getElementById('flyScore').style.color = score >= 7 ? '#3B6D11' : score >= 4 ? '#854F0B' : '#A32D2D';
+          document.getElementById('flyScoreText').textContent = score >= 7 ? 'Excellentes conditions de vol' : score >= 4 ? 'Conditions acceptables' : 'Conditions défavorables';
+          document.getElementById('flyScoreText').style.color = score >= 7 ? '#3B6D11' : score >= 4 ? '#854F0B' : '#A32D2D';
+          if (score >= 7) {
+            document.getElementById('flyStatus').textContent = 'Conditions favorables';
+            document.getElementById('flyBadge').className = 'badge green';
+            document.getElementById('flyBadge').textContent = 'Vol autorisé';
+          } else if (score >= 4) {
+            document.getElementById('flyStatus').textContent = 'Conditions acceptables';
+            document.getElementById('flyBadge').className = 'badge amber';
+            document.getElementById('flyBadge').textContent = 'Vol avec précautions';
+          } else {
+            document.getElementById('flyStatus').textContent = 'Conditions défavorables';
+            document.getElementById('flyBadge').className = 'badge red';
+            document.getElementById('flyBadge').textContent = 'Vol déconseillé';
+          }
+        })
+        .catch(() => {});
+    },
+    err => {
+      document.getElementById('gpsCity').textContent = 'Erreur GPS — vérifiez les permissions';
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function updateNotamDistances() {
+  if (userLat === null) return;
+  notamCoords.forEach((c, i) => {
+    const dist = Math.round(haversine(userLat, userLng, c[0], c[1]));
+    const el = document.getElementById('dist' + i);
+    if (el) el.textContent = dist + ' km';
+  });
+  document.getElementById('radiusInfo').textContent = 'NOTAMs triés par distance depuis votre position';
+}
+
+// ---- CARTE ----
+let map = null, mapInit = false, mapLayers = [], userMarker = null, activeFilter = 'all';
+
+const staticZones = [
+  {name:'CTR Bruxelles (EBBR)',type:'ctr',coords:[[50.92,4.35],[50.92,4.62],[50.76,4.62],[50.76,4.35]],color:'#EF9F27',desc:'Autorisation requise'},
+  {name:'CTR Liège (EBLG)',type:'ctr',coords:[[50.67,5.37],[50.67,5.57],[50.55,5.57],[50.55,5.37]],color:'#EF9F27',desc:'Autorisation requise'},
+  {name:'CTR Charleroi (EBCI)',type:'ctr',coords:[[50.49,4.35],[50.49,4.54],[50.39,4.54],[50.39,4.35]],color:'#EF9F27',desc:'Autorisation requise'},
+  {name:'CTR Anvers (EBAW)',type:'ctr',coords:[[51.21,4.38],[51.21,4.58],[51.12,4.58],[51.12,4.38]],color:'#EF9F27',desc:'Autorisation requise'},
+  {name:'CTR Ostende (EBOS)',type:'ctr',coords:[[51.24,2.81],[51.24,2.99],[51.16,2.99],[51.16,2.81]],color:'#EF9F27',desc:'Autorisation requise'},
+  {name:'Zone mil. Kleine-Brogel',type:'danger',coords:[[51.19,5.44],[51.19,5.58],[51.10,5.58],[51.10,5.44]],color:'#E24B4A',desc:'Base militaire — interdit'},
+  {name:'Zone mil. Florennes',type:'danger',coords:[[50.26,4.60],[50.26,4.76],[50.17,4.76],[50.17,4.60]],color:'#E24B4A',desc:'Zone militaire active'},
+  {name:'Zone mil. Beauvechain',type:'danger',coords:[[50.77,4.74],[50.77,4.87],[50.70,4.87],[50.70,4.74]],color:'#E24B4A',desc:'Base aérienne militaire'},
+  {name:'TMA Bruxelles',type:'tma',coords:[[51.1,3.7],[51.1,5.2],[50.5,5.2],[50.5,3.7]],color:'#378ADD',desc:'Terminal Area',opacity:0.1},
+  {name:'Zone interdite Palais Royal',type:'restricted',coords:[[50.85,4.33],[50.85,4.43],[50.83,4.43],[50.83,4.33]],color:'#E24B4A',desc:'Zone interdite permanente'},
+  {name:'Ardennes — Zone libre',type:'free',coords:[[50.4,5.4],[50.4,6.1],[49.9,6.1],[49.9,5.4]],color:'#639922',desc:'Vol libre 120m AGL'},
+  {name:'Polders côtiers',type:'free',coords:[[51.22,2.5],[51.22,3.2],[51.05,3.2],[51.05,2.5]],color:'#639922',desc:'Vol libre — surveiller côte'},
+];
+
+function initMap() {
+  if (typeof L === 'undefined') {
+    document.getElementById('mapStatus').textContent = 'Chargement de la carte...';
+    setTimeout(initMap, 200);
+    return;
+  }
+  map = L.map('map', {center:[50.5,4.5],zoom:8,zoomControl:true});
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap | © OpenAIP',maxZoom:18}).addTo(map);
+  mapInit = true;
+  loadOpenAIP();
+}
+
+function getColor(type) {
+  return {danger:'#E24B4A',restricted:'#E24B4A',ctr:'#EF9F27',tma:'#378ADD',free:'#639922'}[type] || '#888780';
+}
+
+function drawStatic() {
+  mapLayers.forEach(l => map.removeLayer(l));
+  mapLayers = [];
+  staticZones.forEach(z => {
+    if (activeFilter !== 'all' && z.type !== activeFilter) return;
+    const p = L.polygon(z.coords,{color:z.color||getColor(z.type),fillColor:z.color||getColor(z.type),fillOpacity:z.opacity||0.25,weight:1.5}).addTo(map);
+    p.bindPopup('<b>' + z.name + '</b><br><small>' + z.desc + '</small>');
+    mapLayers.push(p);
+  });
+  document.getElementById('mapStatus').textContent = mapLayers.length + ' zones affichées';
+}
+
+function setFilter(btn, f) {
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  activeFilter = f;
+  if (document.getElementById('apiKey').dataset.loaded === '1') loadOpenAIP(); else drawStatic();
+}
+
+function centerOnUser() {
+  if (!mapInit) return;
+  if (userLat !== null) {
+    map.setView([userLat, userLng], 12);
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker([userLat, userLng],{radius:8,color:'#501313',fillColor:'#501313',fillOpacity:0.9,weight:2}).addTo(map);
+    userMarker.bindPopup('<b>Votre position</b><br>' + userLat.toFixed(4) + '° N, ' + userLng.toFixed(4) + '° E').openPopup();
+  } else {
+    locateUser();
+  }
+}
+
+async function loadOpenAIP() {
+  const key = document.getElementById('apiKey').value.trim();
+  if (!key) { drawStatic(); return; }
+  document.getElementById('mapStatus').textContent = 'Connexion OpenAIP...';
+  try {
+    const res = await fetch('https://api.core.openaip.net/api/airspaces?country=BE&limit=100&apiKey=' + key);
+    if (!res.ok) throw new Error('Clé invalide (HTTP ' + res.status + ')');
+    const data = await res.json();
+    mapLayers.forEach(l => map.removeLayer(l));
+    mapLayers = [];
+    const items = data.items || data.data || [];
+    if (!items.length) throw new Error('Aucune donnée');
+    items.forEach(z => {
+      try {
+        const geo = z.geometry;
+        if (!geo || geo.type !== 'Polygon') return;
+        const coords = geo.coordinates[0].map(c => [c[1],c[0]]);
+        const cat = (z.category||'').toUpperCase();
+        let type = cat.includes('D') ? 'danger' : cat.includes('R') ? 'restricted' : cat.includes('CTR') ? 'ctr' : cat.includes('TMA') ? 'tma' : 'other';
+        if (activeFilter !== 'all' && type !== activeFilter) return;
+        const col = getColor(type);
+        const p = L.polygon(coords,{color:col,fillColor:col,fillOpacity:0.25,weight:1.5}).addTo(map);
+        p.bindPopup('<b>' + (z.name||'Zone') + '</b><br><small>' + cat + ' — ' + (z.lowerLimit?.value||0) + ' → ' + (z.upperLimit?.value||'?') + ' ft</small>');
+        mapLayers.push(p);
+      } catch(e){}
+    });
+    document.getElementById('apiKey').dataset.loaded = '1';
+    document.getElementById('mapStatus').textContent = '✓ ' + mapLayers.length + ' zones OpenAIP chargées — Belgique';
+  } catch(e) {
+    document.getElementById('mapStatus').textContent = '⚠ ' + e.message;
+    drawStatic();
+  }
+}
+
+// ---- RAYON NOTAM ----
+function updateRadius(v) {
+  document.getElementById('radiusVal').textContent = v + ' km';
+}
+
+// ---- CATÉGORIE ----
+const catRules = {
+  loisir:{poids:'< 250g',alt:'120m AGL',immat:'Non requise',form:'Non requise',ass:'Recommandée',zone:'Autorisée',bvlos:'Interdit'},
+  c1:{poids:'250g – 900g',alt:'120m AGL',immat:'Requise',form:'Examen A1/A3',ass:'Obligatoire',zone:'Avec précautions',bvlos:'Interdit'},
+  c2:{poids:'900g – 4 kg',alt:'120m AGL',immat:'Requise',form:'Examen A2',ass:'Obligatoire',zone:'Restreinte',bvlos:'Interdit'},
+  c3:{poids:'> 4 kg',alt:'Sur autorisation',immat:'Requise',form:'A3 + plan vol',ass:'Obligatoire',zone:'Très restreinte',bvlos:'Sur autorisation'}
+};
+function selectCat(btn, cat) {
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const r = catRules[cat];
+  document.getElementById('r-poids').textContent = r.poids;
+  document.getElementById('r-alt').textContent = r.alt;
+  document.getElementById('r-immat').textContent = r.immat;
+  document.getElementById('r-form').textContent = r.form;
+  document.getElementById('r-ass').textContent = r.ass;
+  document.getElementById('r-zone').textContent = r.zone;
+  document.getElementById('r-bvlos').textContent = r.bvlos;
+}
+
+// ---- SERVICE WORKER ----
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').catch(()=>{});
+}
+
+// Auto-locate au chargement - on attend que Leaflet soit prêt
+function startApp() {
+  if (typeof L === 'undefined') {
+    setTimeout(startApp, 100);
+    return;
+  }
+  setTimeout(locateUser, 800);
+}
+window.addEventListener('load', startApp);
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" onerror="var s=document.createElement('script');s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';document.body.appendChild(s);"></script>
+</body>
+</html>
